@@ -23,11 +23,18 @@
 {% endif %}
 
 {# Prepend ts column and aggregate. See here for details: https://tinyurl.com/mwfz6xm4 #}
+{% if column_name == columns.feature_json %}
+    {% set casted_col %}
+    json_serialize({{ qualified_col }})
+    {% endset %}
+{% else %}
+    {% set casted_col = dbt.safe_cast(qualified_col, dbt.type_string())%}
+{% endif %}
 {% set ts_concatenated_and_aggregated_col %}
     {{ aggregation }}(
         {{ dbt.concat([
             dbt.safe_cast(qualified_ts_col, dbt.type_string()),
-            dbt.safe_cast(qualified_col, dbt.type_string())
+            casted_col
             ]) }}
         )
 {% endset %}
@@ -43,13 +50,21 @@
 {% endset %}
 
 {# Remove prepended & aggregated ts column. #}
-{% set output %}
-{{ dbt.safe_cast(
-    dbt.right(
-        ts_concatenated_and_aggregated_col,
-        retain_n_rightmost_characters
-    ), type) }}
+{% set right_trimmed %}
+{{ dbt.right(
+    ts_concatenated_and_aggregated_col,
+    retain_n_rightmost_characters
+) }}
 {% endset %}
+{% if column_name == columns.feature_json %}
+    {% set output %}
+    json_parse({{ right_trimmed }})
+    {% endset %}
+{% else %}
+    {% set output %}
+    {{ dbt.safe_cast(right_trimmed, type) }}
+    {% endset %}
+{% endif %}
 
 {% do return(output) %}
 
